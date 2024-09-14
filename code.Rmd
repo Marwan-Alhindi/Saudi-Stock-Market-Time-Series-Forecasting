@@ -1,0 +1,1448 @@
+---
+title: "TimeSeriesProject"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+date: "2023-06-09"
+---
+
+# Abstract Summary
+
+This comprehensive study delivers an intricate analysis of the four most vibrant markets in Saudi Arabia as observed in 2022, and its primary ambition is to apply ARIMA and GARCH models to forecast the closing metrics for the forthcoming ten months. The methodology employed for this research entailed a meticulous review of the data, encompassing its purification, filtration, visualization, and a rigorous exploration leveraging descriptive statistics. In addition, we crafted model specifications, which were subsequently fitted and diagnosed utilizing sophisticated time series analysis techniques. The analytical process involved making three preliminary model selection decisions before arriving at the fourth and definitive choice. The resulting models have a forecasting scope of 10-15 future values. This constraint may be attributed to a combination of factors, including the limited availability of historical data, the inherent assumptions made by the ARIMA & GARCH models about the data, and most significantly, the volatility inherent in the data. This research did not exhaustively consider all the findings generated from the time series analysis. Consequently, to enhance the precision and reliability of these models, a more profound examination of the results is recommended in subsequent studies.
+
+# Introduction
+
+The concept of the "stock market" encompasses various trading platforms where equities of publicly traded enterprises are purchased and exchanged. This marketplace facilitates the congregation and transaction of securities' buyers and sellers. These markets function as an instrument for the price determination of corporate shares and operate as an economic indicator. Ensuring a fair pricing mechanism, optimal liquidity, and transparency, the market participants vie in an open and competitive environment. https://www.investopedia.com/terms/o/otc.asp
+
+There exist numerous influences that contribute to the fluctuation in stock prices for companies listed on exchanges, extending beyond the basic principle of supply and demand. Indeed, a variety of factors coalesce to incite these oscillations in pricing. These factors include: https://time.com/personal-finance/article/how-are-stock-prices-determined/
+
+1- Corporate Operations: Numerous internal events within a firm may precipitate a rise or fall in its equity prices. For instance, the release of corporate reports can sway investor confidence in the company positively or negatively.
+
+2- Economic Climate: The prevailing economic conditions wield substantial influence over the trajectory of stock prices.
+
+3- Inflation: Inflation, characterized by the overall surge in costs of goods and services, compromises the purchasing power of both businesses and consumers.
+
+4- Interest Rates: The role of interest rates is pivotal in determining the cost burden for companies to secure loans. Heightened interest rates can elevate corporate borrowing expenditures, potentially undermining corporate profits and, consequently, depressing overall stock prices.
+
+5- Global Events: Geopolitical uncertainties, such as warfare and acts of terrorism, can not only trigger instability across nations but can also unsettle stock markets.
+
+6- Significant Investors: As highlighted by Haigh, the investment activities executed by substantial institutional investors like mutual and hedge funds can instigate notable shifts in stock prices. The sizeable share portfolios held by these investors imply that their buying and selling behaviors can considerably influence stock valuations.
+
+In the era predating machine learning, the formidable challenge of predicting stock market trends was amplified due to the extensive range of influencing factors. Today, however, the advent of machine learning has become integral in this domain. Financial institutions or individual investors can utilize machine learning to navigate stock trading in numerous ways, encompassing the prediction of market shifts, investigation of consumer patterns, and scrutiny of stock price movements. Conventional machine learning approaches encompass methodologies such as random forest, naive Bayesian, support vector machine, and K-nearest neighbor. Moreover, temporal sequence analysis, executed via the ARIMA (Autoregressive Integrated Moving Average) and Generalized Autoregressive Conditional Heteroskedasticity (GARCH), can also serve to forecast stock market trajectories.
+
+In this comprehensive analysis, we undertake an investigation of the four most active market values as per the Saudi Exchange's annual report published on December 31, 2022. The Saudi Exchange, being the sole authorized entity to function as the securities exchange within the Kingdom of Saudi Arabia, provides a reliable basis for our study. Our primary objective in this analysis is to project the values at the conclusion of a 10-month horizon, thereby providing potential insights for strategic decision-making processes.
+https://dataconomy.com/2023/01/11/stock-prediction-machine-learning/#:~:text=Predicting%20stock%20prices%20is%20difficult,an%20area%20ripe%20for%20analysis.
+
+# Data Overview
+
+## Libraries
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+packages =  c("ggplot2", "dplyr", "tidyr", "data.table", 'corrplot', 'gridExtra', 'forecast', 'tseries', 'TSA', 'tibble', 'TTR', 'xts', 'dygraphs', 'assertthat',"readxl","MASS","car","dplyr","fUnitRoots","lmtest","fGarch",'rugarch')
+
+my.install <- function(pkg, ...){
+  if (!(pkg %in% installed.packages()[,1])) {
+    install.packages(pkg)
+  }
+  return (library(pkg, ...))
+}
+
+purrr::walk(packages, my.install, character.only = TRUE, warn.conflicts = FALSE)
+```
+
+```{r include=FALSE}
+# Read the Excel file
+AlRajhi <- read_excel("C:/Users/User/OneDrive/سطح المكتب/Time Series Project/Al-Rajhi-Bank.xlsx")
+SNB <- read_excel("C:/Users/User/OneDrive/سطح المكتب/Time Series Project/SNB-Bank.xlsx")
+Alinma <- read_excel("C:/Users/User/OneDrive/سطح المكتب/Time Series Project/Al-Ainma-Bank.xlsx")
+Sabic <- read_excel("C:/Users/User/OneDrive/سطح المكتب/Time Series Project/SABIC-Company.xlsx")
+
+# Reverse the order of rows in the data frame
+AlRajhi <- AlRajhi[nrow(AlRajhi):1,]
+SNB <- SNB[nrow(SNB):1,]
+Alinma <- Alinma[nrow(Alinma):1,]
+Sabic <- Sabic[nrow(Sabic):1,]
+```
+
+## Tail Observations
+
+1- AlRajhi
+
+2- SNB
+
+3- Alinma
+
+4- Sabic
+
+```{r echo=FALSE}
+tail(AlRajhi)
+tail(SNB)
+tail(Alinma)
+tail(Sabic)
+```
+
+
+# Data Cleaning & Filtering
+
+## Filtering
+
+Given that our objective is a thorough examination of these four markets, culminating in an informed assessment of the most viable investment opportunity, our focus is not on daily fluctuations, which are primarily relevant to day traders. Consequently, the data has been meticulously curated to incorporate only the end-of-month figures for each year under consideration.
+
+```{r, results='hide'}
+# Function to filter data
+filter_data <- function(df) {
+  mydata_xts <- xts(df, order.by = as.Date(df$Date))
+  eom_rows <- mydata_xts[endpoints(mydata_xts, "months")]
+  eom_rows_df <- as.data.frame(eom_rows)
+  
+  return(eom_rows_df)
+}
+
+# Applying function to each dataset
+eom_rows_AlRajhi <- filter_data(AlRajhi)
+eom_rows_SNB <- filter_data(SNB)
+eom_rows_Alinma <- filter_data(Alinma)
+eom_rows_Sabic <- filter_data(Sabic)
+```
+
+## Missing Values
+
+```{r echo=TRUE}
+# Checking missing values
+
+any(is.na(eom_rows_AlRajhi))
+any(is.na(eom_rows_SNB))
+any(is.na(eom_rows_Alinma))
+any(is.na(eom_rows_Sabic))
+
+```
+
+## Converting
+
+Our primary focus is on the 'High' attribute. Consequently, we have selectively converted this attribute to a numeric type and subsequently transformed it into a time series for further analysis.
+
+```{r}
+# Converting Attributes Type
+# AlRajhi
+eom_rows_AlRajhi$High <- as.numeric(as.character(eom_rows_AlRajhi$High))
+
+# SNB
+eom_rows_SNB$High <- as.numeric(as.character(eom_rows_SNB$High))
+
+# Alinma
+eom_rows_Alinma$High <- as.numeric(as.character(eom_rows_Alinma$High))
+
+# Sabic
+eom_rows_Sabic$High <- as.numeric(as.character(eom_rows_Sabic$High))
+```
+
+```{r}
+eom_rows_AlRajhi$Date <- as.Date(eom_rows_AlRajhi$Date)
+eom_rows_SNB$Date <- as.Date(eom_rows_SNB$Date)
+eom_rows_Alinma$Date <- as.Date(eom_rows_Alinma$Date)
+eom_rows_Sabic$Date <- as.Date(eom_rows_Sabic$Date)
+
+
+# Convert 'High' column to a time series
+AlRajhi_ts <- ts(eom_rows_AlRajhi$High)
+SNB_ts <- ts(eom_rows_SNB$High)
+Alinma_ts <- ts(eom_rows_Alinma$High)
+Sabic_ts <- ts(eom_rows_Sabic$High)
+```
+
+# Data Visulisation & Descriptive Statistics
+
+## Summary Statistics & Series Investigations
+
+```{r}
+summary(eom_rows_AlRajhi$High)
+summary(eom_rows_SNB$High)
+summary(eom_rows_Alinma$High)
+summary(eom_rows_Sabic$High)
+```
+
+```{r}
+# Set up the layout for 4 plots
+par(mfrow = c(2, 2))
+
+# Create the 4 plots
+plot(AlRajhi_ts, main = "AlRajhi", ylab = "High")
+plot(SNB_ts, main = "SNB", ylab = "High")
+plot(Alinma_ts, main = "Alinma", ylab = "High")
+plot(Sabic_ts, main = "Sabic", ylab = "High")
+```
+
+The observed patterns in the stock prices of AlRajhi and Alinma indicate notable instances of significant upsurges, which may frequently be attributable to speculative trading practices. However, a subsequent regression to levels more congruent with the companies' inherent value is also discernible. This dynamic volatility, characterized by substantial price fluctuations, is manifest in the higher occurrence of outliers in their respective data sets.
+
+```{r echo=FALSE}
+# Load necessary libraries
+library(knitr)
+
+# Create a data frame
+df <- data.frame(
+  Market = c("AlRajhi","SNB","Alinma","Sabic"),
+  Trend = c("Positive","Positive","Positive","Positive"),
+  Seasonality = c("Unknown","Unknown","Unknown","Unknown"),
+  Fluctuations = c("Yes","Yes","Yes","Yes"),
+  Behavior = c("AR/MR","AR/MR","AR/MR","AR/MR"),
+  Turning_Points = c("No","Yes","Maybe","Yes")
+)
+
+# Print the table using knitr
+knitr::kable(df, caption = "Key Features Assumptions About The Time Serieses")
+
+```
+
+## Distributions
+
+```{r echo=FALSE}
+# Create a list of your dataframes
+df_list <- list(AlRajhi = eom_rows_AlRajhi, SNB = eom_rows_SNB, Alinma = eom_rows_Alinma, Sabic = eom_rows_Sabic)
+
+# Modify the function inside lapply to select only the "High" column from each dataframe
+df_combined <- do.call(rbind, lapply(names(df_list), function(x) {
+  data.frame(Market = x, High = df_list[[x]]$High)
+}))
+
+# Create a boxplot for each market
+ggplot(df_combined, aes(x = Market, y = High)) + 
+  geom_boxplot() +
+  labs(title = "Boxplot of Each Market",
+       x = "Market",
+       y = "Value")
+
+```
+
+Sabic, from our observations, presents itself as the most steady market with an absence of outliers, a stark contrast to Alinma and AlRajhi. Noteworthy fluctuations such as these outliers could be indicative of a market boom or a downturn, often precipitated by company-specific events such as the announcement of pivotal decisions. Conversely, while Saudi National Bank (SNB) does not showcase outliers, its median value is noticeably lower compared to Sabic. This suggests different market dynamics and performance metrics when comparing SNB to Sabic.
+
+```{r echo=FALSE}
+# Compute mean of each dataframe
+mean_AlRajhi <- mean(eom_rows_AlRajhi$High, na.rm = TRUE)
+mean_SNB <- mean(eom_rows_SNB$High, na.rm = TRUE)
+mean_Alinma <- mean(eom_rows_Alinma$High, na.rm = TRUE)
+mean_Sabic <- mean(eom_rows_Sabic$High, na.rm = TRUE)
+
+
+# Put them into a data frame
+df <- data.frame(Mean = c(mean_AlRajhi, mean_SNB, mean_Alinma, mean_Sabic),
+                 Market = c("AlRajhi", "SNB","Alinma","Sabic"))
+
+# Create bar plot
+ggplot(df, aes(x = Market, y = Mean)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  labs(x = "Market", y = "Mean", title = "Mean Values of Four Markets")
+```
+
+Despite the pronounced presence of outliers in Alinma and AlRajhi, indicative of significant market fluctuations, they still register a mean value that is inferior to Sabic. This underscores that even amidst their periods of market buoyancy, they remain unable to surpass Sabic's performance levels.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# AlRajhi
+options(repr.plot.width=100, repr.plot.height=100) 
+p1 = ggplot(eom_rows_AlRajhi, aes(High)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density() + ggtitle("AlRajhi") # + xlim(c(0, 1000))
+
+# SNB
+p2 = ggplot(eom_rows_SNB, aes(High)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density() + ggtitle("SNB") # + xlim(c(0, 1000))
+
+# Alinma
+p3 = ggplot(eom_rows_Alinma, aes(High)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density() + ggtitle("Alinma")# + xlim(c(0, 1000))
+
+# Sabic
+p4 = ggplot(eom_rows_Sabic, aes(High)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density() + ggtitle("Sabic")# + xlim(c(0, 1000))
+
+grid.arrange(p1,p2,p3,p4, nrow=2,ncol=2)
+
+```
+
+The data distributions for AlRajhi and Alinma demonstrate a pronounced skew towards particular values, suggestive of a distinct central tendency within these datasets. In contrast, the data for SNB and Sabic exhibit a more expansive dispersion, indicative of a higher degree of variability.
+
+## Normality
+
+```{r echo=FALSE}
+# Normality test
+
+par(mfrow=c(2,2))  
+
+# Time series 1
+qqnorm(AlRajhi_ts, ylab="AlRajhi", xlab="Normal Scores", main = "AlRajhi")
+qqline(AlRajhi_ts)
+
+# Time series 2
+qqnorm(SNB_ts, ylab="SNB", xlab="Normal Scores", main = "SNB")
+qqline(SNB_ts)
+
+# Time series 3
+qqnorm(Alinma_ts, ylab="Alinma", xlab="Normal Scores", main = "Alinma")
+qqline(Alinma_ts)
+
+# Time series 4
+qqnorm(Sabic_ts, ylab="Sabic", xlab="Normal Scores", main = "Sabic")
+qqline(Sabic_ts)
+
+```
+
+Examination of the Normality plots can provide further confirmation of the underlying data distributions. Upon closer inspection, it is evident that Alinma and AlRajhi demonstrate a greater frequency of data points deviating from the line of normality. This suggests a lesser degree of normal distribution within their datasets. Conversely, the distributions of SNB and Sabic, characterized by a higher degree of alignment with the normality line, suggest a stronger adherence to normal distribution within their respective datasets.
+
+```{r echo=FALSE}
+shapiro.test(AlRajhi_ts)
+shapiro.test(SNB_ts)
+shapiro.test(Alinma_ts)
+shapiro.test(Sabic_ts)
+```
+
+The results from the Shapiro-Wilk test offer insights into the normality of our series. It is evident that all the series could benefit from enhancing their alignment with normal distribution. However, it is noteworthy that the data from SNB and Sabic exhibit a closer adherence to a normal distribution when compared to AlRajhi and AlInma which confirm the previous analyses. This is demonstrated by their p-values being proximate to exceeding the 0.05 threshold, which signifies an alignment with normality. This offers a constructive direction for further investigation and potential data transformations.
+
+## Stationarity
+```{r echo=FALSE}
+# Stationarity
+adf.test(AlRajhi_ts)
+adf.test(SNB_ts)
+adf.test(Alinma_ts)
+adf.test(Sabic_ts)
+```
+
+All p-values are higher than 0.05 which indicate that the series is non-stationary. Hence, it contains Trend.
+
+## Variance
+
+```{r echo=FALSE}
+par(mfrow = c(2, 2))
+McLeod.Li.test(y=AlRajhi_ts,main="AlRajhi")
+McLeod.Li.test(y=SNB_ts,main="SNB")
+McLeod.Li.test(y=Alinma_ts,main="Alinma")
+McLeod.Li.test(y=Sabic_ts,main="Sabic")
+```
+
+The results of the McLeod-Li test indicate the presence of changing variance across all assessed series. This suggests that the assumption of constant variance, which is required by traditional models such as ARIMA, may not hold. The detection of heteroscedasticity highlights the need to employ more advanced modeling techniques that can account for varying volatility.
+
+In this context, the use of Generalized Autoregressive Conditional Heteroskedasticity (GARCH) models becomes particularly relevant. GARCH models are specifically designed to capture and model time-varying volatility, making them suitable for addressing the observed heteroscedasticity in the data. By incorporating GARCH models into the analysis, we can better account for and forecast the changing variance patterns, leading to improved modeling accuracy and performance.
+
+Therefore, based on the evidence of changing variance, it is recommended to utilize GARCH models to adequately capture the volatility dynamics in the data and enhance the reliability of predictions.
+
+# Differencing
+
+```{r echo=FALSE}
+# Improving non-constant variances by using log transformation
+
+diff_AlRajhi = diff(AlRajhi_ts)
+diff_SNB = diff(SNB_ts)
+diff_Alinma = diff(Alinma_ts)
+diff_Sabic = diff(Sabic_ts)
+
+# Set up the layout for 4 plots
+par(mfrow = c(2, 2))
+
+# Create the 4 plots
+plot(diff_AlRajhi, main = "Differenced AlRajhi", ylab = "High")
+plot(diff_SNB, main = "Differenced SNB", ylab = "High")
+plot(diff_Alinma, main = "Differenced Alinma", ylab = "High")
+plot(diff_Sabic, main = "Differenced Sabic", ylab = "High")
+```
+
+## Stationarity Confirmation
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+adf.test(diff_AlRajhi)
+adf.test(diff_SNB)
+adf.test(diff_Alinma)
+adf.test(diff_Sabic)
+```
+
+The series is stationary now.
+
+## Variance After Differencing
+
+```{r echo=FALSE}
+par(mfrow = c(2, 2))
+McLeod.Li.test(y=diff_AlRajhi,main = "AlRajhi")
+McLeod.Li.test(y=diff_SNB,main = "SNB")
+McLeod.Li.test(y=diff_Alinma,main = "Alinma")
+McLeod.Li.test(y=diff_Sabic,main = "Sabic")
+```
+
+After applying differencing, the analysis suggests that the SNB and Sabic series exhibit a relatively constant variance.
+
+There are several potential reasons why these series might demonstrate a more stable variance after differencing. Firstly, differencing can help remove or reduce any trend or seasonality present in the data, thereby resulting in a more stationary and constant variance process. Additionally, differencing can eliminate any long-term dependencies or memory effects in the time series, leading to a more consistent and predictable behavior in terms of variance.
+
+# Model Specifications
+
+## ACF & PACF
+
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(diff_AlRajhi)
+pacf(diff_AlRajhi)
+```
+
+- ARMA(0,0)
+
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(diff_Alinma)
+pacf(diff_Alinma)
+```
+
+- ARMA(1,1)
+
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(diff_SNB)
+pacf(diff_SNB)
+```
+
+- ARMA(0,0)
+
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(diff_Sabic)
+pacf(diff_Sabic)
+```
+
+- ARMA(0,0)
+
+## EACF
+
+```{r echo=FALSE}
+eacf(diff_AlRajhi)
+eacf(diff_Alinma)
+eacf(diff_SNB)
+eacf(diff_Sabic)
+```
+
+AlRajhi:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+
+Alinma:
+
+- ARMA(0,1)
+- ARMA(1,1)
+- ARMA(1,2)
+- ARMA(0,2)
+
+SNB:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+
+Sabic:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+
+## BIC
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+par(mfrow=c(2,2))
+res = armasubsets(y=diff_AlRajhi,nar=5,nma=5,y.name='p',ar.method='ols')
+plot(res)
+
+res = armasubsets(y=diff_Alinma,nar=5,nma=5,y.name='p',ar.method='ols')
+plot(res)
+
+res = armasubsets(y=diff_Sabic,nar=5,nma=5,y.name='p',ar.method='ols')
+plot(res)
+
+res = armasubsets(y=diff_SNB,nar=5,nma=5,y.name='p',ar.method='ols')
+plot(res)
+```
+
+AlRajhi (Top Left):
+
+- ARMA(0,2)
+- ARMA(0,5)
+
+Alinma (Top Right):
+
+- ARMA(4,1)
+- ARMA(0,1)
+
+SNB (Bottom Left):
+
+- ARMA(0,2)
+- ARMA(4,2)
+
+Sabic (Bottom Right):
+
+- ARMA(0,3)
+- ARMA(1,3)
+
+## Models Decision 1
+
+AlRajhi:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+- ARMA(0,2)
+- ARMA(0,5)
+
+Alinma:
+
+- ARMA(1,1)
+- ARMA(0,1)
+- ARMA(1,2)
+- ARMA(0,2)
+- ARMA(4,1)
+
+SNB:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+- ARMA(0,2)
+- ARMA(4,2)
+
+SABIC:
+
+- ARMA(0,0)
+- ARMA(0,1)
+- ARMA(1,1)
+- ARMA(0,3)
+- ARMA(1,3)
+
+# Model Fitting
+
+The functions detailed below have been meticulously employed to generate all respective models, utilizing both Maximum Likelihood (ML) and Conditional Sum of Squares (CSS) methods.
+
+```{r echo=TRUE}
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: ML
+fit_arima_ML <- function(p,q,data_set) {
+  var_name <- paste0("arima_ML_", p, 1, q)
+  assign(var_name, arima(data_set, order = c(p, 0, q), method='ML'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: CSS
+
+fit_arima_CSS <- function(p,q,dataset) {
+  var_name <- paste0("arima_CSS_", p, 1, q)
+  assign(var_name, arima(data_set, order = c(p, 0, q), method='CSS'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+```
+
+```{r include=FALSE}
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: ML
+fit_arima_ML <- function(p,q) {
+  var_name <- paste0("arima_ML_", p, 1, q)
+  assign(var_name, arima(diff_AlRajhi, order = c(p, 0, q), method='ML'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: CSS
+
+fit_arima_CSS <- function(p,q) {
+  var_name <- paste0("arima_CSS_", p, 1, q)
+  assign(var_name, arima(diff_AlRajhi, order = c(p, 0, q), method='CSS'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+```
+
+```{r include=FALSE}
+# AlRajhi:
+#- ARMA(0,0)
+#- ARMA(0,1)
+#- ARMA(1,1)
+#- ARMA(0,2)
+#- ARMA(0,5)
+
+fit_arima_ML(0,0)
+fit_arima_CSS(0,0)
+
+fit_arima_ML(0,1)
+fit_arima_CSS(0,1)
+
+fit_arima_ML(1,1)
+fit_arima_CSS(1,1)
+
+fit_arima_ML(0,2)
+fit_arima_CSS(0,2)
+
+fit_arima_ML(0,5)
+fit_arima_CSS(0,5)
+
+```
+
+```{r echo=FALSE}
+model_info <- data.frame(
+  Model = c(
+    "arima_CSS_010", "arima_ML_010",
+    "arima_CSS_011", "arima_ML_011",
+    "arima_CSS_111", "arima_ML_111",
+    "arima_CSS_012", "arima_ML_012",
+    "arima_CSS_015", "arima_ML_015"
+  ),
+  AIC = c(
+    AIC(arima_CSS_010), AIC(arima_ML_010), 
+    AIC(arima_CSS_011), AIC(arima_ML_011), 
+    AIC(arima_CSS_111), AIC(arima_ML_111), 
+    AIC(arima_CSS_012), AIC(arima_ML_012), 
+    AIC(arima_CSS_015), AIC(arima_ML_015)
+  ),
+  BIC = c(
+    BIC(arima_CSS_010), BIC(arima_ML_010), 
+    BIC(arima_CSS_011), BIC(arima_ML_011), 
+    BIC(arima_CSS_111), BIC(arima_ML_111), 
+    BIC(arima_CSS_012), BIC(arima_ML_012), 
+    BIC(arima_CSS_015), BIC(arima_ML_015)
+  )
+)
+
+sorted_model_info_AIC <- model_info[order(model_info$AIC),]
+sorted_model_info_BIC <- model_info[order(model_info$BIC),]
+
+print(sorted_model_info_AIC)
+print(sorted_model_info_BIC)
+
+```
+
+The best Model for AlRajhi based on AIC & BIC is arima_CSS_010
+
+```{r include=FALSE}
+AlRajhi_Model = arima_CSS_010
+```
+
+```{r include=FALSE}
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: ML
+fit_arima_ML <- function(p,q) {
+  var_name <- paste0("arima_ML_", p, 1, q)
+  assign(var_name, arima(diff_Alinma, order = c(p, 0, q), method='ML'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: CSS
+
+fit_arima_CSS <- function(p,q) {
+  var_name <- paste0("arima_CSS_", p, 1, q)
+  assign(var_name, arima(diff_Alinma, order = c(p, 0, q), method='CSS'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+```
+
+
+```{r include=FALSE}
+# Alinma:
+#- ARMA(1,1)
+#- ARMA(0,1)
+#- ARMA(1,2)
+#- ARMA(0,2)
+#- ARMA(4,1)
+
+fit_arima_ML(1,1)
+fit_arima_CSS(1,1)
+
+fit_arima_ML(0,1)
+fit_arima_CSS(0,1)
+
+fit_arima_ML(1,2)
+fit_arima_CSS(1,2)
+
+fit_arima_ML(0,2)
+fit_arima_CSS(0,2)
+
+fit_arima_ML(4,1)
+fit_arima_CSS(4,1)
+
+```
+
+```{r echo=FALSE}
+model_info <- data.frame(
+  Model = c(
+    "arima_CSS_111", "arima_ML_111", 
+    "arima_CSS_011", "arima_ML_011", 
+    "arima_CSS_112", "arima_ML_112",
+    "arima_CSS_012", "arima_ML_012",
+    "arima_CSS_411", "arima_ML_411"
+  ),
+  AIC = c(
+    AIC(arima_CSS_111), AIC(arima_ML_111), 
+    AIC(arima_CSS_011), AIC(arima_ML_011), 
+    AIC(arima_CSS_112), AIC(arima_ML_112),
+    AIC(arima_CSS_012), AIC(arima_ML_012),
+    AIC(arima_CSS_411), AIC(arima_ML_411)
+  ),
+  BIC = c(
+    BIC(arima_CSS_111), BIC(arima_ML_111), 
+    BIC(arima_CSS_011), BIC(arima_ML_011), 
+    BIC(arima_CSS_112), BIC(arima_ML_112),
+    BIC(arima_CSS_012), BIC(arima_ML_012),
+    BIC(arima_CSS_411), BIC(arima_ML_411)
+  )
+)
+
+sorted_model_info_AIC <- model_info[order(model_info$AIC),]
+sorted_model_info_BIC <- model_info[order(model_info$BIC),]
+
+print(sorted_model_info_AIC)
+print(sorted_model_info_BIC)
+
+```
+
+The best models for Alinma based on AIC & BIC is arima_CSS_111
+
+```{r include=FALSE}
+Alinma_Model = arima_CSS_111
+```
+
+```{r include=FALSE}
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: ML
+fit_arima_ML <- function(p,q) {
+  var_name <- paste0("arima_ML_", p, 1, q)
+  assign(var_name, arima(diff_SNB, order = c(p, 0, q), method='ML'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: CSS
+
+fit_arima_CSS <- function(p,q) {
+  var_name <- paste0("arima_CSS_", p, 1, q)
+  assign(var_name, arima(diff_SNB, order = c(p, 0, q), method='CSS'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+```
+
+```{r include=FALSE}
+#SNB:
+#- ARMA(0,0)
+#- ARMA(0,1)
+#- ARMA(1,1)
+#- ARMA(0,2)
+#- ARMA(4,2)
+
+fit_arima_ML(0,0)
+fit_arima_CSS(0,0)
+
+fit_arima_ML(0,1)
+fit_arima_CSS(0,1)
+
+fit_arima_ML(1,1)
+fit_arima_CSS(1,1)
+
+fit_arima_ML(0,2)
+fit_arima_CSS(0,2)
+
+fit_arima_ML(4,2)
+fit_arima_CSS(4,2)
+```
+
+```{r echo=FALSE}
+model_info <- data.frame(
+  Model = c(
+    "arima_CSS_010", "arima_ML_010",
+    "arima_CSS_011", "arima_ML_011",
+    "arima_CSS_111", "arima_ML_111",
+    "arima_CSS_012", "arima_ML_012",
+    "arima_CSS_412", "arima_ML_412"
+  ),
+  AIC = c(
+    AIC(arima_CSS_010), AIC(arima_ML_010),
+    AIC(arima_CSS_011), AIC(arima_ML_011),
+    AIC(arima_CSS_111), AIC(arima_ML_111),
+    AIC(arima_CSS_012), AIC(arima_ML_012),
+    AIC(arima_CSS_412), AIC(arima_ML_412)
+  ),
+  BIC = c(
+    BIC(arima_CSS_010), BIC(arima_ML_010),
+    BIC(arima_CSS_011), BIC(arima_ML_011),
+    BIC(arima_CSS_111), BIC(arima_ML_111),
+    BIC(arima_CSS_012), BIC(arima_ML_012),
+    BIC(arima_CSS_412), BIC(arima_ML_412)
+  )
+)
+
+sorted_model_info_AIC <- model_info[order(model_info$AIC),]
+sorted_model_info_BIC <- model_info[order(model_info$BIC),]
+
+print(sorted_model_info_AIC)
+print(sorted_model_info_BIC)
+
+
+```
+
+
+The best models for SNB based on AIC & BIC is arima_CSS_010
+
+```{r include=FALSE}
+SNB_Model = arima_CSS_010
+```
+
+```{r include=FALSE}
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: ML
+fit_arima_ML <- function(p,q) {
+  var_name <- paste0("arima_ML_", p, 1, q)
+  assign(var_name, arima(diff_Sabic, order = c(p, 0, q), method='ML'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+
+# a function that makes a variable named with the order p,d,q and a model with p,d,q based on parameter estimation method: CSS
+
+fit_arima_CSS <- function(p,q) {
+  var_name <- paste0("arima_CSS_", p, 1, q)
+  assign(var_name, arima(diff_Sabic, order = c(p, 0, q), method='CSS'), envir = .GlobalEnv)
+  return(get(var_name))
+}
+```
+
+
+```{r include=FALSE}
+#Sabic:
+#- ARMA(0,0)
+#- ARMA(0,1)
+#- ARMA(1,1)
+#- ARMA(0,3)
+#- ARMA(1,3)
+
+fit_arima_ML(0,0)
+fit_arima_CSS(0,0)
+
+fit_arima_ML(0,1)
+fit_arima_CSS(0,1)
+
+fit_arima_ML(1,1)
+fit_arima_CSS(1,1)
+
+fit_arima_ML(0,3)
+fit_arima_CSS(0,3)
+
+fit_arima_ML(1,3)
+fit_arima_CSS(1,3)
+
+
+```
+
+```{r echo=FALSE}
+model_info <- data.frame(
+  Model = c(
+    "arima_CSS_010", "arima_ML_010",
+    "arima_CSS_011", "arima_ML_011",
+    "arima_CSS_111", "arima_ML_111",
+    "arima_CSS_013", "arima_ML_013",
+    "arima_CSS_113", "arima_ML_113"
+  ),
+  AIC = c(
+    AIC(arima_CSS_010), AIC(arima_ML_010),
+    AIC(arima_CSS_011), AIC(arima_ML_011),
+    AIC(arima_CSS_111), AIC(arima_ML_111),
+    AIC(arima_CSS_013), AIC(arima_ML_013),
+    AIC(arima_CSS_113), AIC(arima_ML_113)
+  ),
+  BIC = c(
+    BIC(arima_CSS_010), BIC(arima_ML_010),
+    BIC(arima_CSS_011), BIC(arima_ML_011),
+    BIC(arima_CSS_111), BIC(arima_ML_111),
+    BIC(arima_CSS_013), BIC(arima_ML_013),
+    BIC(arima_CSS_113), BIC(arima_ML_113)
+  )
+)
+
+sorted_model_info_AIC <- model_info[order(model_info$AIC),]
+sorted_model_info_BIC <- model_info[order(model_info$BIC),]
+
+print(sorted_model_info_AIC)
+print(sorted_model_info_BIC)
+
+```
+
+The best model for Sabic based on AIC & BIC is arima_ML_113.
+
+```{r include=FALSE}
+Sabic_Model = arima_ML_113
+```
+
+
+## Coefficients Test
+
+```{r}
+coeftest(AlRajhi_Model)
+```
+
+In light of the derived coefficients, the AlRajhi Model has been judiciously revised and updated.
+
+```{r}
+updated_AlRajhi = arima(diff_AlRajhi, order = c(2, 0, 2), method='ML')
+```
+
+```{r}
+coeftest(updated_AlRajhi)
+```
+
+```{r}
+coeftest(Alinma_Model)
+```
+
+In light of the derived coefficients, the Alinma Model has been judiciously revised and updated.
+
+```{r}
+updated_Alinma  = arima(diff_Alinma, order = c(4, 0, 2), method='ML')
+```
+
+```{r}
+coeftest(updated_Alinma)
+```
+
+
+```{r}
+coeftest(SNB_Model)
+```
+
+In light of the derived coefficients, the SNB Model has been judiciously revised and updated.
+
+```{r}
+updated_SNB = arima(diff_SNB, order = c(2, 0, 3), method='ML')
+```
+
+```{r}
+coeftest(updated_SNB)
+```
+
+```{r}
+coeftest(Sabic_Model)
+```
+
+In light of the derived coefficients, the Sabic Model has been judiciously revised and updated.
+
+```{r}
+updated_Sabic = arima(diff_Sabic, order = c(4, 0, 2), method='ML')
+```
+
+```{r}
+coeftest(updated_Sabic)
+```
+
+## Models Decision 2
+
+- updated_AlRajhi = arima(diff_AlRajhi, order = c(2, 0, 2), method='ML')
+- updated_Alinma  = arima(diff_Alinma, order = c(4, 0, 2), method='ML')
+- updated_SNB = arima(diff_SNB, order = c(2, 0, 3), method='ML')
+- updated_Sabic = arima(diff_Sabic, order = c(4, 0, 2), method='ML')
+
+# ARIMA Models Diagnostic
+
+```{r}
+residual.analysis <- function(model, std = TRUE,start = 2, class = c("ARIMA","GARCH","ARMA-GARCH", "garch", "fGARCH")[1]){
+  library(TSA)
+  if (class == "ARIMA"){
+    if (std == TRUE){
+      res.model = rstandard(model)
+    }else{
+      res.model = residuals(model)
+    }
+  }else if (class == "GARCH"){
+    res.model = model$residuals[start:model$n.used]
+  }else if (class == "garch"){
+    res.model = model$residuals[start:model$n.used]  
+  }else if (class == "ARMA-GARCH"){
+    res.model = model@fit$residuals
+  }else if (class == "fGARCH"){
+    res.model = model@residuals
+  }else {
+    stop("The argument 'class' must be either 'ARIMA' or 'GARCH' ")
+  }
+  par(mfrow=c(2,2))
+  plot(res.model,type='o',ylab='Standardised residuals', main="Standardised residuals")
+  abline(h=0)
+  hist(res.model,main="Histogram")
+  qqnorm(res.model,main="QQ plot")
+  qqline(res.model, col = 2)
+  acf(res.model,main="ACF")
+  k=0
+}
+```
+
+AlRajhi:
+
+```{r echo=FALSE}
+residual.analysis(updated_AlRajhi)
+```
+
+Alinma:
+
+```{r echo=FALSE}
+residual.analysis(updated_Alinma)
+```
+
+SNB:
+
+```{r echo=FALSE}
+residual.analysis(updated_SNB)
+```
+
+Sabic:
+
+```{r echo=FALSE}
+residual.analysis(updated_Sabic)
+```
+
+# GARCH Models
+
+The following points provide compelling evidence that all three markets except SNB under examination necessitate the implementation of Generalized Autoregressive Conditional Heteroskedasticity (GARCH) models:
+
+1- Both the Shapiro-Wilk test and the Quantile-Quantile (QQ) plot indicate a deviation from normal distribution across the data from all four markets. This suggests that the features of the datasets are not being fully encapsulated by the Autoregressive Integrated Moving Average (ARIMA) models currently employed.
+
+2- Despite the lack of normality in the residuals, the employed ARIMA models have been successful in capturing the autocorrelation within the datasets. This is evidenced by the absence of significant lags in the residuals.
+
+3- A considerable proportion of the model coefficients have exhibited high p-values, indicating that they are not statistically significant, and their true values may be zero. This lack of statistical significance suggests that these coefficients are not meaningfully contributing to the predictive capacity of the models.
+
+## ACF & PACF
+
+AlRajhi:
+
+```{r echo=FALSE}
+# AlRajhi
+AlRajhi_residuals = updated_AlRajhi$residuals
+abs.res_AlRajhi = abs(AlRajhi_residuals)
+sq.res_AlRajhi = AlRajhi_residuals^2
+
+par(mfrow=c(2,2))
+acf(abs.res_AlRajhi, main="Absolute Residuals ACF")
+pacf(abs.res_AlRajhi, main="Absolute Residuals PACF")
+
+acf(sq.res_AlRajhi, main="Square Residuals ACF")
+pacf(sq.res_AlRajhi, main="Square Residuals PACF")
+```
+
+From abs: max(p,q) = 4, q = 0 ==> max(p,q = 0) = 4 ==> p can only be 4
+
+- GARCH(4,0)
+
+From sqrt: max(p,q) = 3, q = 0 ==> max(p,q = 0) = 3 ==> p can only be 3
+
+- GARCH(3,0)
+
+Alinma:
+
+```{r echo=FALSE}
+# Alinma
+Alinma_residuals = updated_Alinma$residuals
+abs.res_Alinma = abs(Alinma_residuals)
+sq.res_Alinma = Alinma_residuals^2
+
+par(mfrow=c(2,2))
+acf(abs.res_Alinma, main="Absolute Residuals ACF")
+pacf(abs.res_Alinma, main="Absolute Residuals PACF")
+
+acf(sq.res_Alinma, main="Square Residuals ACF")
+pacf(sq.res_Alinma, main="Square Residuals PACF")
+```
+
+From abs: max(p,q) = 3, q = 0, p can only be 3
+
+- GARCH(3,0)
+
+From sqrt: max(p,q) = 2, q = 0, p can only be 2
+
+- GARCH(2,2)
+
+SNB:
+
+```{r echo=FALSE}
+# SNB
+SNB_residuals = updated_SNB$residuals
+abs.res_SNB = abs(SNB_residuals)
+sq.res_SNB = SNB_residuals^2
+
+par(mfrow=c(2,2))
+acf(abs.res_SNB, main="Absolute Residuals ACF")
+pacf(abs.res_SNB, main="Absolute Residuals PACF")
+
+acf(sq.res_SNB, main="Square Residuals ACF")
+pacf(sq.res_SNB, main="Square Residuals PACF")
+
+```
+
+Based on the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) analysis of the residuals from the Swiss National Bank (SNB), we can determine that the application of a Generalized Autoregressive Conditional Heteroskedasticity (GARCH) model may not be necessary. The absence of statistically significant lags in the ACF and PACF provides evidence to suggest that no autoregressive conditional heteroscedasticity is present in the residuals, negating the requirement for a GARCH model.
+
+Sabic:
+
+```{r echo=FALSE}
+# Sabic
+Sabic_residuals = updated_Sabic$residuals
+abs.res_Sabic = abs(Sabic_residuals)
+sq.res_Sabic = Sabic_residuals^2
+
+par(mfrow=c(2,2))
+acf(abs.res_Sabic, main="Absolute Residuals ACF")
+pacf(abs.res_Sabic, main="Absolute Residuals PACF")
+
+acf(sq.res_Sabic, main="Square Residuals ACF")
+pacf(sq.res_Sabic, main="Square Residuals PACF")
+
+```
+
+From sqrt: max(p,q) = 3, q = 0, p can only be 3
+
+- GARCH(3,0)
+
+From abs: p = 2 and q = 4 because no decaying patterns
+
+- GARCH (2,4)
+
+## EACF
+
+AlRajhi:
+
+```{r echo=FALSE}
+# AlRajhi
+par(mfrow=c(1,2))
+eacf(abs.res_AlRajhi)
+eacf(sq.res_AlRajhi)
+```
+
+From abs: max(p,q) = 1, q = 1 ==> max(p,q = 1) ==> p can only be 0
+
+- GARCH(0,1)
+
+From sqrt: max(p,q) = 1, q = 6 ==> No Models
+
+Alinma:
+
+```{r echo=FALSE}
+# Alinma
+par(mfrow=c(1,2))
+eacf(abs.res_Alinma)
+eacf(sq.res_Alinma)
+```
+
+From abs: max(p,q) = 6, q = 4 ==> max(p,q = 4) ==> p can only be 6
+
+- GARCH(6,4)
+
+From sqrt: max(p,q) = 6, q = 4 ==> max(p,q = 4) ==> p can only be 6
+
+- Same
+
+```{r echo=FALSE}
+# Sabic
+par(mfrow=c(1,2))
+eacf(abs.res_Sabic)
+eacf(sq.res_Sabic)
+```
+
+From abs: max(p,q) = 2, q = 2, p can only be 2
+
+- GARCH(2,2)
+
+From sqrt: max(p,q) = 1, q = 1, p can only be 1
+
+- GARCH(1,1)
+
+## Models Decision 3
+
+AlRajhi ARIMA(2,0,2):
+
+- GARCH(4,0)
+- GARCH(3,0)
+- GARCH(0,1)
+
+Alinma ARIMA(4,0,2):
+
+- GARCH(3,0)
+- GARCH(2,2)
+- GARCH(6,4)
+
+Sabic ARIMA(4,0,2):
+
+- GARCH(3,0)
+- GARCH (2,4)
+- GARCH(2,2)
+- GARCH(1,1)
+
+# GARICH + ARIMA Models Diagnostic
+
+AlRajhi ARIMA(2,0,2):
+
+- GARCH(4,0)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(0, 4)), 
+                   mean.model = list(armaOrder = c(2, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+AlRajhi_Final_1<-ugarchfit(spec = model1, data = diff_AlRajhi, out.sample = 100)
+AlRajhi_Final_1
+residual.analysis(model=AlRajhi_Final_1, class = "ARMA-GARCH")
+```
+
+- GARCH(3,0)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(0, 3)), 
+                   mean.model = list(armaOrder = c(2, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+AlRajhi_Final_2<-ugarchfit(spec = model1, data = diff_AlRajhi, out.sample = 100)
+AlRajhi_Final_2
+residual.analysis(model=AlRajhi_Final_2, class = "ARMA-GARCH")
+```
+
+- GARCH(0,1)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 0)), 
+                   mean.model = list(armaOrder = c(2, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+AlRajhi_Final_3<-ugarchfit(spec = model1, data = diff_AlRajhi, out.sample = 100)
+AlRajhi_Final_3
+residual.analysis(model=AlRajhi_Final_3, class = "ARMA-GARCH")
+```
+
+Alinma ARIMA(4,0,2):
+
+- GARCH(3,0)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(0, 3)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Alinma_Final_1<-ugarchfit(spec = model1, data = diff_Alinma, out.sample = 100)
+Alinma_Final_1
+residual.analysis(model=Alinma_Final_1, class = "ARMA-GARCH")
+```
+
+- GARCH(2,2)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(2, 2)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Alinma_Final_2<-ugarchfit(spec = model1, data = diff_Alinma, out.sample = 100)
+Alinma_Final_2
+residual.analysis(model=Alinma_Final_2, class = "ARMA-GARCH")
+```
+
+- GARCH(6,4)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(4, 6)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Alinma_Final_3<-ugarchfit(spec = model1, data = diff_Alinma, out.sample = 100)
+Alinma_Final_3
+residual.analysis(model=Alinma_Final_3, class = "ARMA-GARCH")
+```
+
+- New guessed order: ARIMA(4,1,2)+GARCH(0,2)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(2, 0)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+updated_Alinma_Final<-ugarchfit(spec = model1, data = diff_Alinma, out.sample = 100)
+updated_Alinma_Final
+residual.analysis(model=updated_Alinma_Final, class = "ARMA-GARCH")
+```
+
+Sabic ARIMA(4,0,2):
+
+- GARCH(3,0)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(0, 3)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Sabic_Final_1<-ugarchfit(spec = model1, data = diff_Sabic, out.sample = 100)
+Sabic_Final_1
+residual.analysis(model=Sabic_Final_1, class = "ARMA-GARCH")
+```
+
+- GARCH (2,4)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(4, 2)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Sabic_Final_2<-ugarchfit(spec = model1, data = diff_Sabic, out.sample = 100)
+Sabic_Final_2
+residual.analysis(model=Sabic_Final_2, class = "ARMA-GARCH")
+```
+
+- GARCH(2,2)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(2, 2)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Sabic_Final_3<-ugarchfit(spec = model1, data = diff_Sabic, out.sample = 100)
+Sabic_Final_3
+residual.analysis(model=Sabic_Final_3, class = "ARMA-GARCH")
+```
+
+- GARCH(1,1)
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+model1<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
+                   mean.model = list(armaOrder = c(4, 2), include.mean = FALSE), 
+                   distribution.model = "snorm") # The conditional density to use for the innovations. Try with "norm"
+Sabic_Final_4<-ugarchfit(spec = model1, data = diff_Sabic, out.sample = 100)
+Sabic_Final_4
+residual.analysis(model=Sabic_Final_4, class = "ARMA-GARCH")
+```
+
+## Models Decision 4
+
+The model selection process was guided primarily by the p-values associated with the model's parameters. Emphasis was placed on selecting models characterized by the highest number of coefficients exhibiting p-values less than the established threshold. This stringent selection criterion ensured that chosen models included only those parameters that significantly diverge from zero, thereby implying that these parameters exert a measurable influence on the model's output. This approach facilitates the inclusion of impactful variables while excluding those that do not contribute significantly to the explanation of the dependent variable's variance, thereby enhancing the model's overall predictive capability and efficiency.
+
+- AlRajhi_Final_3 -> ARIMA(2,2)+GARCH (0,1)
+- updated_Alinma_Final -> ARIMA(4,1,2)+GARCH(0,2)
+- updated_SNB -> ARIMA(2,1,3)
+- Sabic_Final_4 -> ARIMA(4,1,2)+GARCH(1,1)
+
+# Forecasting
+
+AlRajhi:
+
+```{r echo=FALSE}
+# Forecasting 20 periods ahead
+AlRajhi_forecast_diff <- ugarchforecast(AlRajhi_Final_3, n.ahead=10)
+
+# Convert the last observed value to numeric
+last_value_AlRajhi <- as.numeric(tail(AlRajhi_ts, n=1))
+
+# Add the last observed value to the cumulative sum of the forecasted differences
+AlRajhi_forecast <- last_value_AlRajhi + cumsum(AlRajhi_forecast_diff@forecast$seriesFor)
+
+AlRajhi_forecast
+
+```
+
+```{r echo=FALSE}
+# Determine how much of the past to include in the plot
+past_periods_to_include <- 50  # Adjust this to include more or less of the past
+
+# Determine the total length of the plot (past + forecast)
+total_length <- past_periods_to_include + length(AlRajhi_forecast)
+
+# Plot original data, but limit x-axis
+plot(AlRajhi_ts[(length(AlRajhi_ts)-past_periods_to_include+1):length(AlRajhi_ts)], 
+     xlim=c(0, total_length), 
+     main="AlRajhi Time Series and Forecasts", 
+     xlab="Time", ylab="Value", type="l", col="blue")
+
+# Add forecast to the plot
+lines(c(rep(NA, past_periods_to_include), AlRajhi_forecast), col="red")
+
+# Add legend
+legend("topleft", legend=c("Original Data", "Forecast"), col=c("blue", "red"), lty=1, bty="n")
+
+
+```
+
+Alinma:
+
+```{r echo=FALSE}
+# Forecasting 20 periods ahead
+Alinma_forecast_diff <- ugarchforecast(updated_Alinma_Final, n.ahead=10)
+
+# Convert the last observed value to numeric
+last_value_Alinma <- as.numeric(tail(Alinma_ts, n=1))
+
+# Add the last observed value to the cumulative sum of the forecasted differences
+Alinma_forecast <- last_value_Alinma + cumsum(Alinma_forecast_diff@forecast$seriesFor)
+
+Alinma_forecast
+```
+
+```{r echo=FALSE}
+# Determine how much of the past to include in the plot
+past_periods_to_include <- 50  # Adjust this to include more or less of the past
+
+# Determine the total length of the plot (past + forecast)
+total_length <- past_periods_to_include + length(Alinma_forecast)
+
+# Plot original data, but limit x-axis
+plot(Alinma_ts[(length(Alinma_ts)-past_periods_to_include+1):length(Alinma_ts)], 
+     xlim=c(0, total_length), 
+     main="Alinma Time Series and Forecasts", 
+     xlab="Time", ylab="Value", type="l", col="blue")
+
+# Add forecast to the plot
+lines(c(rep(NA, past_periods_to_include), Alinma_forecast), col="red")
+
+# Add legend
+legend("topleft", legend=c("Original Data", "Forecast"), col=c("blue", "red"), lty=1, bty="n")
+```
+
+SNB:
+
+```{r echo=FALSE}
+# Calculate the fitted values
+fitted_values <- fitted(updated_SNB)
+
+# Forecast future values
+n_future <- 10 # Number of future time points to forecast
+forecast <- predict(updated_SNB, n.ahead = n_future)
+
+# Calculate the fitted values (on the original scale)
+fitted_values <- SNB_ts[1] + cumsum(fitted(updated_SNB))
+
+forecast_original <- cumsum(c(SNB_ts[length(SNB_ts)], forecast$pred))[-1]
+
+forecast_original
+```
+
+```{r echo=FALSE}
+# Determine how much of the past to include in the plot
+past_periods_to_include <- 50  # Adjust this to include more or less of the past
+
+# Determine the total length of the plot (past + forecast)
+total_length <- past_periods_to_include + length(forecast_original)
+
+# Plot original data, but limit x-axis
+plot(SNB_ts[(length(SNB_ts)-past_periods_to_include+1):length(SNB_ts)], 
+     xlim=c(0, total_length), 
+     main="SNB Time Series and Forecasts", 
+     xlab="Time", ylab="Value", type="l", col="blue")
+
+# Add forecast to the plot
+lines(c(rep(NA, past_periods_to_include), forecast_original), col="red")
+
+# Add legend
+legend("topleft", legend=c("Original Data", "Forecast"), col=c("blue", "red"), lty=1, bty="n")
+```
+
+Sabic:
+
+```{r echo=FALSE}
+# Forecasting 20 periods ahead
+Sabic_forecast_diff <- ugarchforecast(Sabic_Final_4, n.ahead=10)
+
+# Convert the last observed value to numeric
+last_value_Sabic <- as.numeric(tail(Sabic_ts, n=1))
+
+# Add the last observed value to the cumulative sum of the forecasted differences
+Sabic_forecast <- last_value_Sabic + cumsum(Sabic_forecast_diff@forecast$seriesFor)
+
+Sabic_forecast
+```
+
+```{r echo=FALSE}
+# Determine how much of the past to include in the plot
+past_periods_to_include <- 50  # Adjust this to include more or less of the past
+
+# Determine the total length of the plot (past + forecast)
+total_length <- past_periods_to_include + length(Sabic_forecast)
+
+# Plot original data, but limit x-axis
+plot(Sabic_ts[(length(Sabic_ts)-past_periods_to_include+1):length(Sabic_ts)], 
+     xlim=c(0, total_length), 
+     main="Sabic Time Series and Forecasts", 
+     xlab="Time", ylab="Value", type="l", col="blue")
+
+# Add forecast to the plot
+lines(c(rep(NA, past_periods_to_include), Sabic_forecast), col="red")
+
+# Add legend
+legend("topleft", legend=c("Original Data", "Forecast"), col=c("blue", "red"), lty=1, bty="n")
+```
+
+# Conclusion 
+
+In summation, based on our analysis, the Sabic market emerges as the most potentially lucrative investment opportunity in the forthcoming ten-month span. This is closely followed by AlRajhi, then SNB, with Alinma trailing the pack. It is imperative to note, however, that the stock market data under scrutiny is characteristically volatile and marked by multiple inflection points, adding a layer of complexity to the forecasting process. A significant observation from the analysis was the absence of seasonality.
+Our employment of ARIMA models yielded promising results, particularly in capturing the underlying trend and the autoregressive and moving average components of the series. Nonetheless, these models exhibited limitations in adequately accounting for the pronounced volatility and inflection points in the data.
+To bridge this analytical gap, we introduced GARCH models, which demonstrated superior competence in capturing the inherent volatility and inflection points. Still, volatility within the data remains a persistent challenge, necessitating more robust and nuanced analysis techniques.
+This report, while offering valuable insights, merely scratches the surface of the extensive analysis that can be conducted. A more detailed exploration can potentially unearth deeper patterns and trends to enhance the predictive capacity of our models.
+Lastly, it must be emphasized that the paucity of historical data inherently hampers our ability to forecast over a more extended timeframe, thereby impeding long-term investment decisions. The expansion of the data timeframe in future studies might significantly improve the precision of our predictions and offer a more comprehensive view of the investment landscape.
